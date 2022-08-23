@@ -105,6 +105,23 @@ void CameraManagerPlugin::Load(sensors::SensorPtr sensor, sdf::ElementPtr sdf)
     }
 
     _destWidth = _width;
+    if (sdf->HasElement("vendor"))
+    {
+        _vendor = sdf->GetElement("vendor")->Get<std::string>();
+    }
+    if (sdf->HasElement("model"))
+    {
+        _model = sdf->GetElement("model")->Get<std::string>();
+    }
+    if (sdf->HasElement("focal_length")) {
+        _focalLength = sdf->GetElement("focal_length")->Get<float>();
+    }
+    if (sdf->HasElement("sensor_size_h")) {
+        _sensorSizeH = sdf->GetElement("sensor_size_h")->Get<float>();
+    }
+    if (sdf->HasElement("sensor_size_v")) {
+        _sensorSizeV = sdf->GetElement("sensor_size_v")->Get<float>();
+    }
     if (sdf->HasElement("width")) {
         _destWidth = sdf->GetElement("width")->Get<int>();
     }
@@ -249,6 +266,9 @@ void CameraManagerPlugin::OnNewFrame(const unsigned char * image)
 
     gzmsg << "Took picture: " << file_name << endl;
 
+    // Get full filepath
+    char* fullpath = realpath(file_name, NULL);
+
     // Send indication to GCS
     mavlink_message_t msg;
     mavlink_msg_camera_image_captured_pack_chan(
@@ -266,8 +286,12 @@ void CameraManagerPlugin::OnNewFrame(const unsigned char * image)
         0, // q[4]
         _imageCounter,
         1, // result
-        0 // file_url
+        fullpath // file_url
     );
+    free(fullpath);
+
+    // Save history
+    _captureHistory.push_back(msg);
 
     // Send to GCS port directly
     _send_mavlink_message(&msg);
@@ -322,6 +346,9 @@ void CameraManagerPlugin::_handle_message(mavlink_message_t *msg, struct sockadd
             case MAV_CMD_REQUEST_STORAGE_INFORMATION:
                 _handle_storage_info(msg, srcaddr);
                 break;
+            case MAV_CMD_REQUEST_MESSAGE:
+                _handle_request_message(msg, srcaddr);
+                break;
             case MAV_CMD_REQUEST_CAMERA_SETTINGS:
                 _handle_request_camera_settings(msg, srcaddr);
                 break;
@@ -356,8 +383,74 @@ void CameraManagerPlugin::_handle_message(mavlink_message_t *msg, struct sockadd
                 break;
             }
         }
+
+    case MAVLINK_MSG_ID_PARAM_EXT_REQUEST_READ:
+        mavlink_param_ext_request_read_t req;
+        mavlink_msg_param_ext_request_read_decode(msg, &req);
+
+        if (strcmp(req.param_id, "CAM_ZOOM") == 0)
+        {
+            // Format param value
+            uint32_t zoomInfo = static_cast<uint32_t>(((_zoom - 1.0f) / _maxZoom) * 100);
+            std::array<char, 128> bytes{};
+            std::memcpy(bytes.data(), &zoomInfo, sizeof(uint32_t));
+            _send_requested_read_param(req, bytes.data(), MAV_PARAM_TYPE_UINT32, srcaddr);
+        }
+        else if (strcmp(req.param_id, "CAM_ZOOMMODE") == 0)
+        {
+            // Format param value
+            std::array<char, 128> bytes{};
+            std::memcpy(bytes.data(), &_zoom_mode, sizeof(CAMERA_ZOOM_TYPE));
+            _send_requested_read_param(req, bytes.data(), MAV_PARAM_TYPE_UINT32, srcaddr);
+        }
+        else if (strcmp(req.param_id, "CAM_MODE") == 0)
+        {
+            // Format param value
+            std::array<char, 128> bytes{};
+            std::memcpy(bytes.data(), &_mode, sizeof(uint8_t));
+            _send_requested_read_param(req, bytes.data(), MAV_PARAM_TYPE_UINT32, srcaddr);
+        }
         break;
     }
+}
+
+void CameraManagerPlugin::_handle_request_message(const mavlink_message_t *message, struct sockaddr* srcaddr)
+{
+    mavlink_command_long_t cmd;
+    mavlink_msg_command_long_decode(message, &cmd);
+
+    switch (static_cast<int>(cmd.param1))
+    {
+        case MAVLINK_MSG_ID_CAMERA_IMAGE_CAPTURED:
+            int captureID = static_cast<int>(cmd.param2);
+            if (captureID >= _captureHistory.size())
+            {
+                gzerr << "Improper image index" << endl;
+                break;
+            }
+            _send_mavlink_message(&_captureHistory[captureID]);
+        break;
+    }
+}
+
+void CameraManagerPlugin::_send_requested_read_param(
+    const mavlink_param_ext_request_read_t& req,
+    const char* data,
+    const MAV_PARAM_TYPE type,
+    struct sockaddr* srcaddr)
+{
+    mavlink_message_t resp;
+    mavlink_msg_param_ext_value_pack_chan(
+        _systemID,
+        _componentID,
+        MAVLINK_COMM_1,
+        &resp,
+        req.param_id,
+        data,
+        type,
+        1,
+        0);
+    _send_mavlink_message(&resp, srcaddr);
 }
 
 void CameraManagerPlugin::_send_mavlink_message(const mavlink_message_t *message, struct sockaddr* srcaddr)
@@ -560,8 +653,6 @@ void CameraManagerPlugin::_handle_camera_info(const mavlink_message_t *pMsg, str
 {
     gzdbg << "Send camera info" << endl;
     _send_cmd_ack(pMsg->sysid, pMsg->compid, MAV_CMD_REQUEST_CAMERA_INFORMATION, MAV_RESULT_ACCEPTED, srcaddr);
-    static const char vendor[MAVLINK_MSG_CAMERA_INFORMATION_FIELD_VENDOR_NAME_LEN] = "PX4.io";
-    static const char model[MAVLINK_MSG_CAMERA_INFORMATION_FIELD_MODEL_NAME_LEN] = "Gazebo";
     static const char uri[MAVLINK_MSG_CAMERA_INFORMATION_FIELD_CAM_DEFINITION_URI_LEN] = {};
     uint32_t camera_capabilities = CAMERA_CAP_FLAGS_CAPTURE_IMAGE | CAMERA_CAP_FLAGS_CAPTURE_VIDEO |
             CAMERA_CAP_FLAGS_HAS_MODES | CAMERA_CAP_FLAGS_HAS_BASIC_ZOOM |
@@ -573,19 +664,19 @@ void CameraManagerPlugin::_handle_camera_info(const mavlink_message_t *pMsg, str
         _componentID,
         MAVLINK_COMM_1,
         &msg,
-        0,                         // time_boot_ms
-        (const uint8_t *)vendor,   // const uint8_t * vendor_name
-        (const uint8_t *)model,    // const uint8_t * model_name
-        0x01,                      // uint32_t firmware_version
-        50.0f,                     // float focal_lenth
-        35.0f,                     // float  sensor_size_h
-        24.0f,                     // float  sensor_size_v
-        _width,                    // resolution_h
-        _height,                   // resolution_v
-        0,                         // lens_id
-        camera_capabilities,       // CAP_FLAGS
-        0,                         // Camera Definition Version
-        uri                        // URI
+        0,                                  // time_boot_ms
+        (const uint8_t *)_vendor.c_str(),   // const uint8_t * vendor_name
+        (const uint8_t *)_model.c_str(),    // const uint8_t * model_name
+        0x01,                               // uint32_t firmware_version
+        _focalLength,                       // float focal_length
+        _sensorSizeH,                       // float  sensor_size_h
+        _sensorSizeV,                       // float  sensor_size_v
+        _width,                             // resolution_h
+        _height,                            // resolution_v
+        0,                                  // lens_id
+        camera_capabilities,                // CAP_FLAGS
+        0,                                  // Camera Definition Version
+        uri                                 // URI
     );
     _send_mavlink_message(&msg, srcaddr);
 }
@@ -708,12 +799,21 @@ void CameraManagerPlugin::_handle_camera_zoom(const mavlink_message_t *pMsg, str
     _send_cmd_ack(pMsg->sysid, pMsg->compid,
                   MAV_CMD_SET_CAMERA_ZOOM, MAV_RESULT_ACCEPTED, srcaddr);
 
-    if (cmd.param1 == ZOOM_TYPE_CONTINUOUS) {
+    _zoom_mode = static_cast<CAMERA_ZOOM_TYPE>(cmd.param1);
+    if (_zoom_mode == ZOOM_TYPE_CONTINUOUS) {
         _zoom = std::max(std::min(float(_zoom + 0.1 * cmd.param2), _maxZoom), 1.0f);
         _zoom_cmd = cmd.param2;
-    } else {
+    } else if (_zoom_mode == ZOOM_TYPE_STEP) {
         _zoom = std::max(std::min(float(_zoom + 0.1 * cmd.param2), _maxZoom), 1.0f);
         _camera->SetHFOV(_hfov / _zoom);
+    } else if (_zoom_mode == ZOOM_TYPE_RANGE) {
+        _zoom = (_maxZoom - 1.0f) * (cmd.param2 / 100.0f) + 1.0f;
+        _zoom = std::min(std::max(_zoom, 1.0f), _maxZoom);
+        _camera->SetHFOV(_hfov / _zoom);
+    } else if (_zoom_mode == ZOOM_TYPE_FOCAL_LENGTH) {
+        gzwarn << "Focal Length Zoom not supported" << endl;
+    } else {
+        gzwarn << "Zoom mode not supported" << endl;
     }
 }
 

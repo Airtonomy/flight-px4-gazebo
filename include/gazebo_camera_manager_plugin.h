@@ -61,11 +61,13 @@ private:
     void _handle_storage_info(const mavlink_message_t *pMsg, struct sockaddr* srcaddr);
     void _handle_take_photo(const mavlink_message_t *pMsg, struct sockaddr* srcaddr);
     void _handle_stop_take_photo(const mavlink_message_t *pMsg, struct sockaddr* srcaddr);
+    void _handle_request_message(const mavlink_message_t *pMsg, struct sockaddr* srcaddr);
     void _handle_request_camera_settings(const mavlink_message_t *pMsg, struct sockaddr* srcaddr);
     void _handle_request_video_stream_information(const mavlink_message_t *pMsg, struct sockaddr* srcaddr);
     void _handle_request_video_stream_status(const mavlink_message_t *pMsg, struct sockaddr* srcaddr);
     void _handle_set_camera_mode(const mavlink_message_t *pMsg, struct sockaddr* srcaddr);
     void _handle_camera_zoom(const mavlink_message_t *pMsg, struct sockaddr* srcaddr);
+    void _send_requested_read_param(const mavlink_param_ext_request_read_t& req, const char* data, const MAV_PARAM_TYPE type, struct sockaddr* srcaddr);
     void _send_capture_status(struct sockaddr* srcaddr = NULL);
     void _send_cmd_ack(uint8_t target_sysid, uint8_t target_compid, uint16_t cmd, unsigned char result, struct sockaddr* srcaddr);
     void _send_heartbeat();
@@ -75,8 +77,13 @@ private:
 
     int         _imageCounter{0};
     uint8_t     _mode{CAMERA_MODE_VIDEO};
+    std::string _vendor{"PX4.io"};
+    std::string _model{"Gazebo"};
     uint32_t    _width{0};
     uint32_t    _height{0};
+    float       _focalLength{0};
+    float       _sensorSizeH{0};
+    float       _sensorSizeV{0};
     uint32_t    _depth{0};
     uint32_t    _destWidth{0};     ///< output size
     uint32_t    _destHeight{0};
@@ -86,6 +93,7 @@ private:
     double      _captureInterval{0.0};
     int         _fd{-1};
     int         _zoom_cmd{0};
+    CAMERA_ZOOM_TYPE _zoom_mode{CAMERA_ZOOM_TYPE::ZOOM_TYPE_RANGE};
 
     enum {
         CAPTURE_DISABLED,
@@ -117,6 +125,7 @@ private:
     int                         _systemID{1};
     int                         _componentID{MAV_COMP_ID_CAMERA};
     int                         _mavlinkCamPort{14530};
+    std::vector<mavlink_message_t> _captureHistory;
 };
 
 } /* namespace gazebo */
