@@ -329,6 +329,7 @@
     </joint>
 
     <link name="cgo3_camera_link">
+      <gravity>0</gravity>
       <inertial>
         <!-- place holder -->
         <pose>-0.041 0 -0.162 0 0 0</pose>
@@ -390,8 +391,8 @@
           <horizontal_fov>2.0</horizontal_fov>
           <image>
             <format>R8G8B8</format>
-            <width>640</width>
-            <height>360</height>
+            <width>3840</width>
+            <height>2160</height>
           </image>
           <clip>
             <near>0.05</near>
@@ -400,7 +401,7 @@
         </camera>
         <always_on>1</always_on>
         <update_rate>10</update_rate>
-        <visualize>true</visualize>
+        <visualize>false</visualize>
         <plugin name="GstCameraPlugin" filename="libgazebo_gst_camera_plugin.so">
             <robotNamespace></robotNamespace>
             <udpHost>127.0.0.1</udpHost>
@@ -411,7 +412,7 @@
             <interval>1</interval>
             <vendor>Yuneec</vendor>
             <model>CGO3</model>
-            <focal_length>2.44</focal_length>
+            <focal_length>14</focal_length>
             <sensor_size_h>6.17</sensor_size_h>
             <sensor_size_v>4.55</sensor_size_v>
             <width>3840</width>
