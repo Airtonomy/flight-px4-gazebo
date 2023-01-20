@@ -25,7 +25,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 # Set c++11 or higher
 include(EnableC++XX)
 # Set c11
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -47,6 +47,10 @@ option(SEND_ODOMETRY_DATA "Send Mavlink ODOMETRY msgs" OFF)
 find_package(Boost 1.58 REQUIRED COMPONENTS system thread filesystem)
 find_package(gazebo REQUIRED)
 find_package(PkgConfig REQUIRED)
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  tf
+)
 pkg_search_module(GLIB REQUIRED glib-2.0)
 # Note: If using catkin, Python 2 is found since it points
 # to the Python libs installed with the ROS distro
@@ -100,6 +104,9 @@ endif()
 
 link_directories(${GAZEBO_LIBRARY_DIRS})
 
+include_directories(/usr/include/gazebo-7/gazebo)
+
+
 add_subdirectory( external/OpticalFlow OpticalFlow )
 set( OpticalFlow_LIBS "OpticalFlow" )
 
@@ -120,7 +127,15 @@ if (CATKIN_DEVEL_PREFIX)
   message(STATUS "catkin ENABLED")
   find_package(catkin REQUIRED)
   if (catkin_FOUND)
-    catkin_package()
+    include_directories(
+          include
+          ${catkin_INCLUDE_DIRS}
+    )
+    catkin_package(
+      INCLUDE_DIRS include
+      LIBRARIES livox_laser_simulation
+      CATKIN_DEPENDS tf
+    )
   else()
     message(FATAL_ERROR "catkin not found")
   endif()
@@ -173,7 +188,7 @@ endif()
 ## Build ##
 ###########
 
-add_compile_options(-Wno-deprecated-declarations -Wno-address-of-packed-member)
+add_compile_options(-Wno-deprecated-declarations -Wno-address-of-packed-member -std=c++17)
 
 set(GAZEBO_MSG_INCLUDE_DIRS)
 foreach(ITR ${GAZEBO_INCLUDE_DIRS})
@@ -350,6 +365,7 @@ add_library(sensor_msgs SHARED ${SEN_PROTO_SRCS})
 link_libraries(mav_msgs nav_msgs std_msgs sensor_msgs)
 link_libraries(physics_msgs)
 
+add_library(livox_laser_simulation SHARED src/livox_laser_simulation/livox_points_plugin.cpp src/livox_laser_simulation/livox_ode_multiray_shape.cpp)
 add_library(gazebo_airspeed_plugin SHARED src/gazebo_airspeed_plugin.cpp)
 add_library(gazebo_camera_manager_plugin SHARED src/gazebo_camera_manager_plugin.cpp)
 add_library(gazebo_gps_plugin SHARED src/gazebo_gps_plugin.cpp)
@@ -377,6 +393,7 @@ add_library(gazebo_airship_dynamics_plugin SHARED src/gazebo_airship_dynamics_pl
 add_library(gazebo_drop_plugin SHARED src/gazebo_drop_plugin.cpp)
 
 set(plugins
+  livox_laser_simulation
   gazebo_airspeed_plugin
   gazebo_camera_manager_plugin
   gazebo_gps_plugin
@@ -462,6 +479,8 @@ endif()
 QT5_WRAP_CPP(headers_MOC2 include/gazebo_user_camera_plugin.h)
 add_library(gazebo_user_camera_plugin SHARED ${headers_MOC2} src/gazebo_user_camera_plugin.cpp)
 target_link_libraries(gazebo_user_camera_plugin ${GAZEBO_LIBRARIES} ${Qt5Core_LIBRARIES} ${Qt5Widgets_LIBRARIES} ${Qt5Test_LIBRARIES})
+target_link_libraries(livox_laser_simulation ${catkin_LIBRARIES} RayPlugin)
+target_link_libraries(livox_laser_simulation libprotobuf.so.9)
 set(plugins
   ${plugins}
   gazebo_user_camera_plugin
