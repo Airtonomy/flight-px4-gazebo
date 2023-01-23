@@ -39,6 +39,7 @@
   <test_depend>gtest</test_depend>
   <buildtool_depend>catkin</buildtool_depend>
   <buildtool_depend>gazebo_ros</buildtool_depend>
+  <build_depend>tf</build_depend>
   <build_depend>eigen</build_depend>
   <build_depend>gazebo_ros</build_depend>
   <build_depend>geometry_msgs</build_depend>
@@ -62,6 +63,7 @@
   <run_depend>sensor_msgs</run_depend>
   <run_depend>roscpp</run_depend>
   <run_depend>std_msgs</run_depend>
+  <run_depend>tf</run_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
