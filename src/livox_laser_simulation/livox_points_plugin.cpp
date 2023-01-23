@@ -40,13 +40,22 @@ void convertDataToRotateInfo(const std::vector<std::vector<double>> &datas, std:
 }
 
 void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr sdf) {
-    gzerr << "TEST 123 livox \n";
-    std::string project_directory = std::filesystem::current_path().parent_path().parent_path().parent_path();
-    std::string scan_mode_directory = project_directory + "/Tools/sitl_gazebo/scan_mode/";
+
+    std::string px4_directory;
+
+    char * val;                                                                        
+    val = std::getenv("PX4_DIR");                                                                                                               
+    if (val != NULL) {                                                                 
+        px4_directory = val;                                                                    
+    } else {
+        px4_directory = std::filesystem::current_path().parent_path().parent_path().parent_path();
+    }
+    std::string scan_mode_directory = px4_directory + "/Tools/sitl_gazebo/scan_mode/";
     std::vector<std::vector<double>> datas;
     std::string file_name = sdf->Get<std::string>("csv_file_name");
     std::string csv_file = scan_mode_directory + file_name;
     gzerr << csv_file << std::endl;
+    ROS_ERROR_STREAM("px4_directory is : "<<px4_directory);
     ROS_INFO_STREAM("load csv file name:" << csv_file);
     if (!CsvReader::ReadCsvFile(csv_file, datas)) {
         ROS_INFO_STREAM("cannot get csv file!" << csv_file << "will return !");
