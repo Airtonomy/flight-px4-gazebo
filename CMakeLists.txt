@@ -47,10 +47,6 @@ option(SEND_ODOMETRY_DATA "Send Mavlink ODOMETRY msgs" OFF)
 find_package(Boost 1.58 REQUIRED COMPONENTS system thread filesystem)
 find_package(gazebo REQUIRED)
 find_package(PkgConfig REQUIRED)
-find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  tf
-)
 pkg_search_module(GLIB REQUIRED glib-2.0)
 # Note: If using catkin, Python 2 is found since it points
 # to the Python libs installed with the ROS distro
@@ -127,15 +123,7 @@ if (CATKIN_DEVEL_PREFIX)
   message(STATUS "catkin ENABLED")
   find_package(catkin REQUIRED)
   if (catkin_FOUND)
-    include_directories(
-          include
-          ${catkin_INCLUDE_DIRS}
-    )
-    catkin_package(
-      INCLUDE_DIRS include
-      LIBRARIES livox_laser_simulation
-      CATKIN_DEPENDS tf
-    )
+    catkin_package()
   else()
     message(FATAL_ERROR "catkin not found")
   endif()
@@ -365,7 +353,6 @@ add_library(sensor_msgs SHARED ${SEN_PROTO_SRCS})
 link_libraries(mav_msgs nav_msgs std_msgs sensor_msgs)
 link_libraries(physics_msgs)
 
-add_library(livox_laser_simulation SHARED src/livox_laser_simulation/livox_points_plugin.cpp src/livox_laser_simulation/livox_ode_multiray_shape.cpp)
 add_library(gazebo_airspeed_plugin SHARED src/gazebo_airspeed_plugin.cpp)
 add_library(gazebo_camera_manager_plugin SHARED src/gazebo_camera_manager_plugin.cpp)
 add_library(gazebo_gps_plugin SHARED src/gazebo_gps_plugin.cpp)
@@ -393,7 +380,6 @@ add_library(gazebo_airship_dynamics_plugin SHARED src/gazebo_airship_dynamics_pl
 add_library(gazebo_drop_plugin SHARED src/gazebo_drop_plugin.cpp)
 
 set(plugins
-  livox_laser_simulation
   gazebo_airspeed_plugin
   gazebo_camera_manager_plugin
   gazebo_gps_plugin
@@ -479,8 +465,7 @@ endif()
 QT5_WRAP_CPP(headers_MOC2 include/gazebo_user_camera_plugin.h)
 add_library(gazebo_user_camera_plugin SHARED ${headers_MOC2} src/gazebo_user_camera_plugin.cpp)
 target_link_libraries(gazebo_user_camera_plugin ${GAZEBO_LIBRARIES} ${Qt5Core_LIBRARIES} ${Qt5Widgets_LIBRARIES} ${Qt5Test_LIBRARIES})
-target_link_libraries(livox_laser_simulation ${catkin_LIBRARIES} RayPlugin)
-target_link_libraries(livox_laser_simulation libprotobuf.so.9)
+
 set(plugins
   ${plugins}
   gazebo_user_camera_plugin
@@ -499,6 +484,42 @@ foreach(plugin ${plugins})
   add_dependencies(${plugin} mav_msgs nav_msgs std_msgs sensor_msgs)
   add_dependencies(${plugin} physics_msgs)
 endforeach()
+
+################################
+## Install Livox lidar plugin ##
+################################
+
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  tf
+)
+
+# see if catkin was invoked to build this
+if (CATKIN_DEVEL_PREFIX)
+  message(STATUS "catkin ENABLED")
+  find_package(catkin REQUIRED)
+  if (catkin_FOUND)
+    include_directories(
+          include
+          ${catkin_INCLUDE_DIRS}
+    )
+    catkin_package(
+      INCLUDE_DIRS include
+      LIBRARIES livox_laser_simulation
+      CATKIN_DEPENDS tf
+    )
+  else()
+    message(FATAL_ERROR "catkin not found")
+  endif()
+else()
+  message(STATUS "catkin DISABLED")
+endif()
+
+add_library(livox_laser_simulation SHARED src/livox_laser_simulation/livox_points_plugin.cpp src/livox_laser_simulation/livox_ode_multiray_shape.cpp)
+target_link_libraries(livox_laser_simulation ${catkin_LIBRARIES} RayPlugin)
+target_link_libraries(livox_laser_simulation libprotobuf.so.9)
+
+
 
 # Configure the setup script
 if (catkin_FOUND)
@@ -569,3 +590,4 @@ set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${GAZEBO_MAJOR_VERSION}-${PROJECT_V
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${PROJECT_NAME}-${GAZEBO_MAJOR_VERSION}-${PROJECT_VERSION}")
 
 include(CPack)
+
