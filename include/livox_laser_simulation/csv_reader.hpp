@@ -10,6 +10,10 @@
 #include <string>
 #include <vector>
 
+/**
+ * @brief Custom reader designed to parse a list of comma separated numeric values from a file.
+ *
+ */
 class CsvReader {
  public:
     static bool ReadCsvFile(std::string file_name, std::vector<std::vector<double>>& datas) {
