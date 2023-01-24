@@ -5,6 +5,8 @@
 #include "livox_laser_simulation/livox_points_plugin.h"
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/point_cloud_conversion.h>
 #include <gazebo/physics/Model.hh>
 #include <gazebo/physics/MultiRayShape.hh>
 #include <gazebo/physics/PhysicsEngine.hh>
@@ -43,10 +45,10 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
 
     std::string px4_directory;
 
-    char * val;                                                                        
-    val = std::getenv("PX4_DIR");                                                                                                               
-    if (val != NULL) {                                                                 
-        px4_directory = val;                                                                    
+    char * val;
+    val = std::getenv("PX4_DIR");
+    if (val != NULL) {
+        px4_directory = val;
     } else {
         px4_directory = std::filesystem::current_path().parent_path().parent_path().parent_path();
     }
@@ -70,9 +72,9 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
     char **argv = nullptr;
     auto curr_scan_topic = sdf->Get<std::string>("ros_topic");
     ROS_INFO_STREAM("ros topic name:" << curr_scan_topic);
-    ros::init(argc, argv, curr_scan_topic);
+    ros::init(argc, argv, "livox_node");
     rosNode.reset(new ros::NodeHandle);
-    rosPointPub = rosNode->advertise<sensor_msgs::PointCloud>(curr_scan_topic, 5);
+    rosPointPub2 = rosNode->advertise<sensor_msgs::PointCloud2>(curr_scan_topic, 5);
 
     raySensor = _parent;
     auto sensor_pose = raySensor->Pose();
@@ -144,7 +146,8 @@ void LivoxPointsPlugin::OnNewLaserScans() {
 
         sensor_msgs::PointCloud scan_point;
         scan_point.header.stamp = ros::Time::now();
-        scan_point.header.frame_id = raySensor->Name();
+        // scan_point.header.frame_id = raySensor->Name();
+        scan_point.header.frame_id = "livox_frame";
         auto &scan_points = scan_point.points;
 
         for (auto &pair : points_pair) {
@@ -186,7 +189,10 @@ void LivoxPointsPlugin::OnNewLaserScans() {
             }
         }
         if (scanPub && scanPub->HasConnections()) scanPub->Publish(laserMsg);
-        rosPointPub.publish(scan_point);
+        sensor_msgs::PointCloud2 scan_point_pointcloud2;
+        sensor_msgs::convertPointCloudToPointCloud2(scan_point, scan_point_pointcloud2);
+        // rosPointPub.publish(scan_point);
+        rosPointPub2.publish(scan_point_pointcloud2);
         ros::spinOnce();
     }
 }

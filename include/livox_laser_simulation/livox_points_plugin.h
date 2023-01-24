@@ -91,7 +91,8 @@ class LivoxPointsPlugin : public RayPlugin {
     std::vector<AviaRotateInfo> aviaInfos;
 
     std::shared_ptr<ros::NodeHandle> rosNode;
-    ros::Publisher rosPointPub;
+   //  ros::Publisher rosPointPub;
+    ros::Publisher rosPointPub2;
     std::shared_ptr<tf::TransformBroadcaster> tfBroadcaster;
 
     int64_t samplesStep = 0;
