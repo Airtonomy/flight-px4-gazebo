@@ -25,7 +25,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 # Set c++11 or higher
 include(EnableC++XX)
 # Set c11
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -100,6 +100,9 @@ endif()
 
 link_directories(${GAZEBO_LIBRARY_DIRS})
 
+include_directories(/usr/include/gazebo-7/gazebo)
+
+
 add_subdirectory( external/OpticalFlow OpticalFlow )
 set( OpticalFlow_LIBS "OpticalFlow" )
 
@@ -173,7 +176,7 @@ endif()
 ## Build ##
 ###########
 
-add_compile_options(-Wno-deprecated-declarations -Wno-address-of-packed-member)
+add_compile_options(-Wno-deprecated-declarations -Wno-address-of-packed-member -std=c++17)
 
 set(GAZEBO_MSG_INCLUDE_DIRS)
 foreach(ITR ${GAZEBO_INCLUDE_DIRS})
@@ -462,6 +465,7 @@ endif()
 QT5_WRAP_CPP(headers_MOC2 include/gazebo_user_camera_plugin.h)
 add_library(gazebo_user_camera_plugin SHARED ${headers_MOC2} src/gazebo_user_camera_plugin.cpp)
 target_link_libraries(gazebo_user_camera_plugin ${GAZEBO_LIBRARIES} ${Qt5Core_LIBRARIES} ${Qt5Widgets_LIBRARIES} ${Qt5Test_LIBRARIES})
+
 set(plugins
   ${plugins}
   gazebo_user_camera_plugin
@@ -480,6 +484,42 @@ foreach(plugin ${plugins})
   add_dependencies(${plugin} mav_msgs nav_msgs std_msgs sensor_msgs)
   add_dependencies(${plugin} physics_msgs)
 endforeach()
+
+################################
+## Install Livox lidar plugin ##
+################################
+
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  tf
+)
+
+# see if catkin was invoked to build this
+if (CATKIN_DEVEL_PREFIX)
+  message(STATUS "catkin ENABLED")
+  find_package(catkin REQUIRED)
+  if (catkin_FOUND)
+    include_directories(
+          include
+          ${catkin_INCLUDE_DIRS}
+    )
+    catkin_package(
+      INCLUDE_DIRS include
+      LIBRARIES livox_laser_simulation
+      CATKIN_DEPENDS tf
+    )
+  else()
+    message(FATAL_ERROR "catkin not found")
+  endif()
+else()
+  message(STATUS "catkin DISABLED")
+endif()
+
+add_library(livox_laser_simulation SHARED src/livox_laser_simulation/livox_points_plugin.cpp src/livox_laser_simulation/livox_ode_multiray_shape.cpp)
+target_link_libraries(livox_laser_simulation ${catkin_LIBRARIES} RayPlugin)
+target_link_libraries(livox_laser_simulation libprotobuf.so.9)
+
+
 
 # Configure the setup script
 if (catkin_FOUND)
@@ -550,3 +590,4 @@ set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${GAZEBO_MAJOR_VERSION}-${PROJECT_V
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${PROJECT_NAME}-${GAZEBO_MAJOR_VERSION}-${PROJECT_VERSION}")
 
 include(CPack)
+
